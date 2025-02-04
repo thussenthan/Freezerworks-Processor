@@ -194,5 +194,3 @@ This software interacts directly with your Freezerworks database via API calls. 
 ---
 
 Feel free to modify any sections (such as repository URLs, allowed CSV values, or instructions) to best match your project’s needs.
-
-**Full Changelog**: https://github.com/thussenthan/Freezerworks-Processor/commits/1.5

@@ -42,7 +42,7 @@ The program uses Bearer Token authentication to securely connect with the Freeze
   ```
 - **Tkinter:** Usually bundled with Python.
 - **SSL Certificate:**  
-  Place the file `freezerworks.pennstatehealth.net.crt` in the same directory as the script/executable.
+  Place the file `freezerworks.pennstatehealth.net.crt` or something similar in the same directory as the script/executable.
 - **Access to the Freezerworks API:**  
   Ensure you have valid API credentials and network access.
 
@@ -50,13 +50,17 @@ The program uses Bearer Token authentication to securely connect with the Freeze
 
 1. **Clone or Download the Repository:**
    ```bash
-   git clone https://github.com/yourusername/Freezerworks-Processor.git
+   git clone https://github.com/thussenthan/Freezerworks-Processor.git
    ```
 2. **Verify the SSL Certificate:**  
-   Ensure that `freezerworks.pennstatehealth.net.crt` is in the repository directory.
+   Ensure that `freezerworks.pennstatehealth.net.crt` (or any SSL certificate, if applicable) is in the repository directory.
 3. **Run the Application:**
-   - **Executable:**  
-     If available, double-click `Freezerworks Processor.exe` to launch.
+   - **Executable:**
+     To make an executable file, run the following command:
+     ```bash
+     pyinstaller --clean --onefile --windowed --add-data "freezerworks.pennstatehealth.net.crt;." "Freezerworks Processor.py"
+     ```
+     Then double-click `Freezerworks Processor.exe` to launch.
    - **Python Script:**  
      Run the following command:
      ```bash

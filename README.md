@@ -109,7 +109,7 @@ The program uses Bearer Token authentication to securely connect with the Freeze
   - *Sample Collection Site* (integer, no leading zeros)
   - *Sample Study ID*
   - *SL0 Number* (four-digit number; do not include "SL0")
-  - *Aliquot Type* (must be one of: "Biomarker", "ctDNA", "NK", or "PK")
+  - *Aliquot Type* (must be one of: "Biomarker", "ctDNA", "NK", "PK", or "BMA")
   - *Date of Collection* (MM/DD/YYYY)
   - *Freezing Date* (MM/DD/YYYY)
   - *(Study Time Point)* – Optional

@@ -619,16 +619,21 @@ class AliquotUpdaterApp:
 
         aliquot_url = f"{self.base_url}/samples/{freezerworks_id}/aliquots"
 
-        if Aliquot_Type == "PK":
-            aliquot_payload = {
-                "numberOfAliquots": int(Number_of_PK_Aliquots),
+        aliquot_payload = {
+                "numberOfAliquots": 1,
                 "WorkflowStatus": "Available",
-                "Aliquot_Type": "Plasma for PK analysis",
+                "Aliquot_Type": Aliquot_Type,
                 "Date_of_Collection": Date_of_Collection,
                 "Sample_Collection_Site": Hospital_Name,
                 "Sample_Notes": Notes,
-                "Freezing_Date": Freezing_Date,
                 "Sample_Study_ID": Sample_Study_ID,
+            }
+
+        if Aliquot_Type == "PK":
+            aliquot_payload.update = {
+                "numberOfAliquots": int(Number_of_PK_Aliquots),
+                "Aliquot_Type": "Plasma for PK analysis",
+                "Freezing_Date": Freezing_Date,
             }
 
             # Make aliquot creation requests
@@ -678,6 +683,78 @@ class AliquotUpdaterApp:
                 self.log(
                     f"Error during label printing for SL0 Number {Master_ID}: {e}",
                 )
+                return
+        elif Aliquot_Type == "BMA":
+            aliquot_payload.update = {"Aliquot_Type": "Bone Marrow Aspirate"}
+
+            try:
+                response = requests.post(
+                    aliquot_url,
+                    json=aliquot_payload,
+                    headers=headers,
+                    verify=self.cert_path,
+                )
+                response.raise_for_status()
+                data = response.json()
+                FK_ParentAliquotID = data["properties"]["PK_AliquotUID"]
+            except requests.exceptions.RequestException as e:
+                self.log(
+                    f"Error during aliquot creation for SL0 Number {Master_ID}: {e}",
+                )
+                self.not_updated_aliquots.append(Master_ID)
+                return
+
+            aliquot_payload.update = {
+                "Subaliquot_Type": "MNC",
+                "Freezing_Date": Freezing_Date,
+                "FK_ParentAliquotID": FK_ParentAliquotID,
+            }
+
+            try:
+                response = requests.post(
+                    aliquot_url,
+                    json=aliquot_payload,
+                    headers=headers,
+                    verify=self.cert_path,
+                )
+                response.raise_for_status()
+                data = response.json()
+                pk_aliquot_uid = data["properties"]["PK_AliquotUID"]
+                labels_to_print_ids.append(pk_aliquot_uid)
+                self.log(f"Aliquot UID created: {pk_aliquot_uid}")
+            except requests.exceptions.RequestException as e:
+                self.log(
+                    f"Error during aliquot creation for SL0 Number {Master_ID}: {e}",
+                )
+                self.not_updated_aliquots.append(Master_ID)
+                return
+
+            if Study_TimePoint:
+                self.studyTimepoint(Master_ID, FK_ParentAliquotID, Study_TimePoint, headers)
+                for aliquot_id in labels_to_print_ids:
+                    self.studyTimepoint(Master_ID, aliquot_id, Study_TimePoint, headers)
+
+            # Printing labels
+            label_url = f"{self.base_url}/labels/16/print"
+            label_payload = {
+                "aliquots": labels_to_print_ids,
+                "numberOfLabelsPerAliquot": 1,
+            }
+            try:
+                response = requests.post(
+                    label_url,
+                    json=label_payload,
+                    headers=headers,
+                    verify=self.cert_path,
+                )
+                response.raise_for_status()
+                self.log(f"Labels made for SL0 Number {Master_ID}")
+                return response.content
+            except requests.exceptions.RequestException as e:
+                self.log(
+                    f"Error during label printing for SL0 Number {Master_ID}: {e}",
+                )
+                return
         else:
             if Aliquot_Type == "Biomarker":
                 Aliquot_Type = "Biomarker Blood"
@@ -685,14 +762,8 @@ class AliquotUpdaterApp:
             if Aliquot_Type == "NK":
                 Aliquot_Type = "NK cell analysis"
 
-            aliquot_payload = {
-                "numberOfAliquots": 1,
-                "WorkflowStatus": "Available",
+            aliquot_payload.update = {
                 "Aliquot_Type": Aliquot_Type,
-                "Date_of_Collection": Date_of_Collection,
-                "Sample_Collection_Site": Hospital_Name,
-                "Sample_Notes": Notes,
-                "Sample_Study_ID": Sample_Study_ID,
             }
 
             # Make aliquot creation requests

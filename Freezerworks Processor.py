@@ -373,7 +373,7 @@ class AliquotUpdaterApp:
                 f"Error: Invalid hospital ID for SL0 Number {Master_ID}", bold=True
             )
             return None
-        hospital_url = "https://freezerworks.pennstatehealth.net/api/v1/fields/10182"
+        hospital_url = f"{self.base_url}/fields/10182"
         try:
             response = requests.get(
                 hospital_url,
@@ -402,6 +402,50 @@ class AliquotUpdaterApp:
             self.not_updated_aliquots.append(Master_ID)
             return None
         return hospital_name
+
+    # Get allowable entries for timepoint
+    def allowable_timepoint_entries(self, headers):
+        url = f"{self.base_url}/fields/10191"
+        response = requests.get(url, headers=headers, verify=self.cert_path)
+        response.raise_for_status()
+        data = response.json()
+        allowable_entries = data["properties"]["allowableEntries"]
+
+        # Build a dictionary mapping the normalized entry to the original entry.
+        normalized_allowable = {
+            "".join(entry.lower().split()): entry for entry in allowable_entries
+        }
+        return normalized_allowable
+
+    def get_allowable_entry(self, value: str, headers):
+        normalized_value = "".join(value.lower().split())
+        normalized_allowable = self.allowable_timepoint_entries(headers)
+        return normalized_allowable.get(normalized_value)
+
+    def studyTimepoint(self, Master_ID, aliquot_id, Study_TimePoint, headers):
+        aliquot_url = f"{self.base_url}/aliquots/{aliquot_id}"
+        allowable_entry = self.get_allowable_entry(Study_TimePoint, headers)
+
+        if allowable_entry == None:
+            aliquot_payload = {
+                "Study_timepoint_other": Study_TimePoint,
+                "pk_time_point": "Other",
+            }
+        else:
+            aliquot_payload = {"pk_time_point": Study_TimePoint}
+
+        try:
+            response = requests.post(
+                aliquot_url,
+                json=aliquot_payload,
+                headers=headers,
+                verify=self.cert_path,
+            )
+            response.raise_for_status()
+            return
+        except requests.exceptions.RequestException as e:
+            self.log(f"Study timepoint request failed: {e} for SL0 Number {Master_ID}")
+            self.not_updated_aliquots.append(Master_ID)
 
     def process_patient_sample(self):
         headers, csv_file_path = self.validate_inputs()
@@ -609,39 +653,9 @@ class AliquotUpdaterApp:
 
             if Study_TimePoint:
                 for aliquot_id in labels_to_print_ids:
-                    time.sleep(0.5)
-                    aliquot_url = f"{self.base_url}/aliquots/{aliquot_id}"
-                    try:
-                        aliquot_payload = {"pk_time_point": Study_TimePoint}
-                        response = requests.post(
-                            aliquot_url,
-                            json=aliquot_payload,
-                            headers=headers,
-                            verify=self.cert_path,
-                        )
-                        # Check if response is successful
-                        if response.status_code != 200:
-                            # Try alternative payload
-                            aliquot_payload = {"Study_timepoint_other": Study_TimePoint}
-                            time.sleep(0.5)
-                            response = requests.post(
-                                aliquot_url,
-                                json=aliquot_payload,
-                                headers=headers,
-                                verify=self.cert_path,
-                            )
-                            if response.status_code != 200:
-                                self.log(
-                                    f"Alternative payload failed with status code {response.status_code}  for SL0 Number {Master_ID}"
-                                )
-                                self.log(
-                                    f"Response: {response.content}  for SL0 Number {Master_ID}"
-                                )
+                    self.studyTimepoint(Master_ID, aliquot_id, Study_TimePoint, headers)
 
-                    except requests.exceptions.RequestException as e:
-                        self.log(
-                            f"Request failed: {e} for SL0 Number {Master_ID}"
-                        )  # Printing labels
+            # Printing labels
             if "BCC18" in Sample_Study_ID and Aliquot_Type == "ADA Serum":
                 label_url = f"{self.base_url}/labels/17/print"
             else:
@@ -677,8 +691,8 @@ class AliquotUpdaterApp:
                 "Aliquot_Type": Aliquot_Type,
                 "Date_of_Collection": Date_of_Collection,
                 "Sample_Collection_Site": Hospital_Name,
-                "Study_timepoint_other": Study_TimePoint,
                 "Sample_Notes": Notes,
+                "Sample_Study_ID": Sample_Study_ID,
             }
 
             # Make aliquot creation requests
@@ -716,7 +730,6 @@ class AliquotUpdaterApp:
                 {
                     "Subaliquot_Type": "Plasma",
                     "Freezing_Date": Freezing_Date,
-                    "Sample_Study_ID": Sample_Study_ID,
                     "FK_ParentAliquotID": FK_ParentAliquotID,
                 }
             )
@@ -778,6 +791,11 @@ class AliquotUpdaterApp:
                         f"Error during aliquot creation in repeat loop for SL0 Number {Master_ID}: {e}",
                     )
                     return
+            if Study_TimePoint:
+                self.studyTimepoint(Master_ID, FK_ParentAliquotID, Study_TimePoint, headers)
+                for aliquot_id in labels_to_print_ids:
+                    self.studyTimepoint(Master_ID, aliquot_id, Study_TimePoint, headers)
+
             # Printing labels
             label_url = f"{self.base_url}/labels/9/print"
             label_payload = {
@@ -1242,7 +1260,7 @@ class AliquotUpdaterApp:
                     f"Error: aliquot already assigned location {aliquot_id}",
                     bold=True,
                 )
-        except requests.exceptions.SSLError as e:
+        except requests.exceptions.RequestException as e:
             self.log(f"SSL Error for aliquot {aliquot_id}: {str(e)}", bold=True)
             self.not_updated_aliquots.append(aliquot_id)
 

@@ -365,7 +365,8 @@ class AliquotUpdaterApp:
             )
             return None
 
-    def get_hospital_name(self, hospital_id, Master_ID, headers):
+    def get_hospital_name(self, hospital_id, Master_ID):
+        headers = self.validate_inputs()
         try:
             normalized_id = int(hospital_id)
         except ValueError:
@@ -551,9 +552,7 @@ class AliquotUpdaterApp:
             return
 
         # Get hospital name and check if it's valid
-        Hospital_Name = self.get_hospital_name(
-            Sample_Collection_Site, Master_ID, headers
-        )
+        Hospital_Name = self.get_hospital_name(Sample_Collection_Site, Master_ID)
         if Hospital_Name is None:
             self.log(
                 f"Error: Sample processing aborted due to invalid hospital name for SL0 Number {Master_ID}",
@@ -620,14 +619,14 @@ class AliquotUpdaterApp:
         aliquot_url = f"{self.base_url}/samples/{freezerworks_id}/aliquots"
 
         aliquot_payload = {
-                "numberOfAliquots": 1,
-                "WorkflowStatus": "Available",
-                "Aliquot_Type": Aliquot_Type,
-                "Date_of_Collection": Date_of_Collection,
-                "Sample_Collection_Site": Hospital_Name,
-                "Sample_Notes": Notes,
-                "Sample_Study_ID": Sample_Study_ID,
-            }
+            "numberOfAliquots": 1,
+            "WorkflowStatus": "Available",
+            "Aliquot_Type": Aliquot_Type,
+            "Date_of_Collection": Date_of_Collection,
+            "Sample_Collection_Site": Hospital_Name,
+            "Sample_Notes": Notes,
+            "Sample_Study_ID": Sample_Study_ID,
+        }
 
         if Aliquot_Type == "PK":
             aliquot_payload.update = {
@@ -730,7 +729,9 @@ class AliquotUpdaterApp:
                 return
 
             if Study_TimePoint:
-                self.studyTimepoint(Master_ID, FK_ParentAliquotID, Study_TimePoint, headers)
+                self.studyTimepoint(
+                    Master_ID, FK_ParentAliquotID, Study_TimePoint, headers
+                )
                 for aliquot_id in labels_to_print_ids:
                     self.studyTimepoint(Master_ID, aliquot_id, Study_TimePoint, headers)
 
@@ -863,7 +864,9 @@ class AliquotUpdaterApp:
                     )
                     return
             if Study_TimePoint:
-                self.studyTimepoint(Master_ID, FK_ParentAliquotID, Study_TimePoint, headers)
+                self.studyTimepoint(
+                    Master_ID, FK_ParentAliquotID, Study_TimePoint, headers
+                )
                 for aliquot_id in labels_to_print_ids:
                     self.studyTimepoint(Master_ID, aliquot_id, Study_TimePoint, headers)
 
@@ -998,9 +1001,7 @@ class AliquotUpdaterApp:
             self.not_updated_aliquots.append(Master_ID)
             return
         # Get hospital name and check if it's valid
-        Hospital_Name = self.get_hospital_name(
-            Sample_Collection_Site, Master_ID, headers
-        )
+        Hospital_Name = self.get_hospital_name(Sample_Collection_Site, Master_ID)
         if Hospital_Name is None:
             self.log(
                 f"Error: Sample processing aborted due to invalid hospital name for SL0 Number {Master_ID}",

@@ -366,43 +366,45 @@ class AliquotUpdaterApp:
             return None
 
     def get_hospital_name(self, hospital_id, Master_ID):
-        headers = self.validate_inputs()
-        try:
-            normalized_id = int(hospital_id)
-        except ValueError:
-            self.log(
-                f"Error: Invalid hospital ID for SL0 Number {Master_ID}", bold=True
-            )
-            return None
-        hospital_url = f"{self.base_url}/fields/10182"
-        try:
-            response = requests.get(
-                hospital_url,
-                headers=headers,
-                verify=self.cert_path,
-            )
-            response.raise_for_status()
-            data = response.json()
-            # Extract allowable entries
-            allowable_entries = data["properties"]["allowableEntries"]
-            # Initialize the lookup table
-            lookup_table = {}
-            # Process each entry to split the prefix and the description
-            for entry in allowable_entries:
-                # Split at the first space
-                parts = entry.split(" ", 1)
-                if len(parts) == 2:
-                    key, value = parts
-                    # Remove leading zeros from the numeric key and add to the lookup table
-                    lookup_table[int(key)] = entry
-            hospital_name = lookup_table.get(normalized_id)
-        except requests.exceptions.RequestException as e:
-            self.log(
-                f"Error: Hospital ID not found for SL0 Number {Master_ID}", bold=True
-            )
-            self.not_updated_aliquots.append(Master_ID)
-            return None
-        return hospital_name
+        headers, _ = self.validate_inputs()
+        if headers is not None:
+            try:
+                normalized_id = int(hospital_id)
+            except ValueError:
+                self.log(
+                    f"Error: Invalid hospital ID for SL0 Number {Master_ID}", bold=True
+                )
+                return None
+            hospital_url = f"{self.base_url}/fields/10182"
+            try:
+                response = requests.get(
+                    hospital_url,
+                    headers=headers,
+                    verify=self.cert_path,
+                )
+                response.raise_for_status()
+                data = response.json()
+                # Extract allowable entries
+                allowable_entries = data["properties"]["allowableEntries"]
+                # Initialize the lookup table
+                lookup_table = {}
+                # Process each entry to split the prefix and the description
+                for entry in allowable_entries:
+                    # Split at the first space
+                    parts = entry.split(" ", 1)
+                    if len(parts) == 2:
+                        key, value = parts
+                        # Remove leading zeros from the numeric key and add to the lookup table
+                        lookup_table[int(key)] = entry
+                hospital_name = lookup_table.get(normalized_id)
+            except requests.exceptions.RequestException as e:
+                self.log(
+                    f"Error: Hospital ID not found for SL0 Number {Master_ID}",
+                    bold=True,
+                )
+                self.not_updated_aliquots.append(Master_ID)
+                return None
+            return hospital_name
 
     # Get allowable entries for timepoint
     def allowable_timepoint_entries(self, headers):
@@ -629,11 +631,13 @@ class AliquotUpdaterApp:
         }
 
         if Aliquot_Type == "PK":
-            aliquot_payload.update = {
-                "numberOfAliquots": int(Number_of_PK_Aliquots),
-                "Aliquot_Type": "Plasma for PK analysis",
-                "Freezing_Date": Freezing_Date,
-            }
+            aliquot_payload.update(
+                {
+                    "numberOfAliquots": int(Number_of_PK_Aliquots),
+                    "Aliquot_Type": "Plasma for PK analysis",
+                    "Freezing_Date": Freezing_Date,
+                }
+            )
 
             # Make aliquot creation requests
             try:
@@ -684,7 +688,7 @@ class AliquotUpdaterApp:
                 )
                 return
         elif Aliquot_Type == "BMA":
-            aliquot_payload.update = {"Aliquot_Type": "Bone Marrow Aspirate"}
+            aliquot_payload.update({"Aliquot_Type": "Bone Marrow Aspirate"})
 
             try:
                 response = requests.post(
@@ -703,11 +707,13 @@ class AliquotUpdaterApp:
                 self.not_updated_aliquots.append(Master_ID)
                 return
 
-            aliquot_payload.update = {
-                "Subaliquot_Type": "MNC",
-                "Freezing_Date": Freezing_Date,
-                "FK_ParentAliquotID": FK_ParentAliquotID,
-            }
+            aliquot_payload.update(
+                {
+                    "Subaliquot_Type": "MNC",
+                    "Freezing_Date": Freezing_Date,
+                    "FK_ParentAliquotID": FK_ParentAliquotID,
+                }
+            )
 
             try:
                 response = requests.post(
@@ -763,9 +769,11 @@ class AliquotUpdaterApp:
             if Aliquot_Type == "NK":
                 Aliquot_Type = "NK cell analysis"
 
-            aliquot_payload.update = {
-                "Aliquot_Type": Aliquot_Type,
-            }
+            aliquot_payload.update(
+                {
+                    "Aliquot_Type": Aliquot_Type,
+                }
+            )
 
             # Make aliquot creation requests
             try:

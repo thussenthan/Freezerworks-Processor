@@ -398,11 +398,6 @@ class AliquotUpdaterApp:
                         lookup_table[int(key)] = entry
                 hospital_name = lookup_table.get(normalized_id)
             except requests.exceptions.RequestException as e:
-                self.log(
-                    f"Error: Hospital ID not found for SL0 Number {Master_ID}",
-                    bold=True,
-                )
-                self.not_updated_aliquots.append(Master_ID)
                 return None
             return hospital_name
 
@@ -464,6 +459,7 @@ class AliquotUpdaterApp:
 
         for csv_row in csv_rows:
             if len(csv_row) < 6:
+                self.not_updated_aliquots.append("Incorrect CSV Formatting")
                 self.log(f"Error: Insufficient columns in row: {csv_row}", bold=True)
                 continue
             (
@@ -557,7 +553,7 @@ class AliquotUpdaterApp:
         Hospital_Name = self.get_hospital_name(Sample_Collection_Site, Master_ID)
         if Hospital_Name is None:
             self.log(
-                f"Error: Sample processing aborted due to invalid hospital name for SL0 Number {Master_ID}",
+                f"Error: Sample processing aborted due to invalid hospital name for SL0 Number {Master_ID}. Please re-create the Bearer Token (if 5 minutes has elapsed) and try again.",
                 bold=True,
             )
             self.not_updated_aliquots.append(Master_ID)
@@ -742,7 +738,7 @@ class AliquotUpdaterApp:
                     self.studyTimepoint(Master_ID, aliquot_id, Study_TimePoint, headers)
 
             # Printing labels
-            label_url = f"{self.base_url}/labels/16/print"
+            label_url = f"{self.base_url}/labels/9/print"
             label_payload = {
                 "aliquots": labels_to_print_ids,
                 "numberOfLabelsPerAliquot": 1,
@@ -913,6 +909,7 @@ class AliquotUpdaterApp:
 
         for csv_row in csv_rows:
             if len(csv_row) < 11:
+                self.not_updated_aliquots.append("Incorrect CSV Formatting")
                 self.log(f"Error: Insufficient columns in row: {csv_row}", bold=True)
                 continue
             (
@@ -1012,7 +1009,7 @@ class AliquotUpdaterApp:
         Hospital_Name = self.get_hospital_name(Sample_Collection_Site, Master_ID)
         if Hospital_Name is None:
             self.log(
-                f"Error: Sample processing aborted due to invalid hospital name for SL0 Number {Master_ID}",
+                f"Error: Sample processing aborted due to invalid hospital name for SL0 Number {Master_ID}. Please re-create the Bearer Token (if 5 minutes has elapsed) and try again.",
                 bold=True,
             )
             self.not_updated_aliquots.append(Master_ID)
@@ -1088,7 +1085,7 @@ class AliquotUpdaterApp:
         Passage_Number = int(Passage_Number)
         if Passage_Number == 1:
             labels_ids = [3]
-        if Passage_Number == 2:
+        elif Passage_Number == 2:
             labels_ids = [3, 3, 3]
         elif Passage_Number == 3:
             labels_ids = [3, 3, 3, 3, 7]
@@ -1263,6 +1260,7 @@ class AliquotUpdaterApp:
 
         for csv_row in csv_rows:
             if len(csv_row) < 4:
+                self.not_updated_aliquots.append("Incorrect CSV Formatting")
                 self.log(f"Error: Insufficient columns in row: {csv_row}", bold=True)
                 continue
 

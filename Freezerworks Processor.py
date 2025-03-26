@@ -149,7 +149,7 @@ class AliquotUpdaterApp:
         # Footer label
         self.footer_label = tk.Label(
             root,
-            text="@Thussenthan Walter-Angelo (Sholler Lab, Penn State College of Medicine); Version 1.5",
+            text="@Thussenthan Walter-Angelo (Sholler Lab, Penn State College of Medicine); Version 1.6",
             font=("Helvetica", 10),
             bg="#f0f0f0",
             anchor="center",

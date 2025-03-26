@@ -220,7 +220,7 @@ class AliquotUpdaterApp:
                         "22",
                         "NMTT-373-03",
                         "3260",
-                        "Biomarker, ctDNA, NK, or PK",
+                        "BM, ctDNA, NK, BMA, BC, Tumor, or PK",
                         "01/01/2022",
                         today_date,
                         "Day 181",
@@ -408,7 +408,6 @@ class AliquotUpdaterApp:
         response.raise_for_status()
         data = response.json()
         allowable_entries = data["properties"]["allowableEntries"]
-
         # Build a dictionary mapping the normalized entry to the original entry.
         normalized_allowable = {
             "".join(entry.lower().split()): entry for entry in allowable_entries
@@ -431,7 +430,7 @@ class AliquotUpdaterApp:
             }
         else:
             aliquot_payload = {"pk_time_point": Study_TimePoint}
-
+        time.sleep(0.5)  # Adding a small delay to avoid overwhelming the server
         try:
             response = requests.post(
                 aliquot_url,
@@ -444,6 +443,79 @@ class AliquotUpdaterApp:
         except requests.exceptions.RequestException as e:
             self.log(f"Study timepoint request failed: {e} for SL0 Number {Master_ID}")
             self.not_updated_aliquots.append(Master_ID)
+
+    def masterID_search(self, Master_ID, headers):
+        aliquot_url = ""
+        # Payload for initial sample search
+        payload = {
+            "table": "Samples",
+            "listViewId": -9,
+            "limit": 1,
+            "searchLines": [
+                {
+                    "lineNumber": 1,
+                    "fieldId": 10166,
+                    "comparison": "in",
+                    "compareValue": f"{Master_ID}",
+                    "openParensCount": 0,
+                    "closeParensCount": 0,
+                }
+            ],
+        }
+
+        try:
+            response = requests.post(
+                f"{self.base_url}/search/",
+                json=payload,
+                headers=headers,
+                verify=self.cert_path,
+            )
+            response.raise_for_status()
+            data = response.json()
+        except requests.exceptions.RequestException as e:
+            self.log(
+                f"Error during search request for SL0 Number {Master_ID}: {e}",
+            )
+            self.not_updated_aliquots.append(Master_ID)
+            return
+
+        try:
+            freezerworks_id = data["properties"]["results"][0]["FreezerworksID"]
+        except (KeyError, IndexError):
+            self.log(
+                f"Error: Unable to find FreezerworksID in response data for SL0 Number {Master_ID}",
+                bold=True,
+            )
+            self.not_updated_aliquots.append(Master_ID)
+            return
+
+        aliquot_url = f"{self.base_url}/samples/{freezerworks_id}/aliquots"
+        return aliquot_url
+
+    def output_merged_pdf(self, merger, files_added):
+        # After all processing is done, output the merged PDF
+        if files_added > 0:
+            output_path = filedialog.asksaveasfilename(
+                defaultextension=".pdf",
+                filetypes=[("PDF files", "*.pdf")],
+                initialfile="Processed_Samples.pdf",
+            )
+            if output_path:
+                # Write the merged PDF to file
+                with open(output_path, "wb") as output_file:
+                    merger.write(output_file)
+                    self.log(f"PDF successfully saved to {output_path}", bold=True)
+                self.open_file(output_path)
+        else:
+            self.log("No labels to print.")
+        merger.close()
+
+        if self.not_updated_aliquots:
+            self.log("The following SL0 Numbers were not updated correctly:", bold=True)
+            for master_ID in self.not_updated_aliquots:
+                self.log(master_ID, bold=True)
+        else:
+            self.log("All SL0 Numbers were updated successfully.", bold=True)
 
     def process_patient_sample(self):
         headers, csv_file_path = self.validate_inputs()
@@ -497,30 +569,7 @@ class AliquotUpdaterApp:
                             f"Error appending PDF labels for SL0 Number {Master_ID}: {e}",
                             bold=True,
                         )
-
-        # After all processing is done, output the merged PDF
-        if files_added > 0:
-            output_path = filedialog.asksaveasfilename(
-                defaultextension=".pdf",
-                filetypes=[("PDF files", "*.pdf")],
-                initialfile="Processed_Samples.pdf",
-            )
-            if output_path:
-                # Write the merged PDF to file
-                with open(output_path, "wb") as output_file:
-                    merger.write(output_file)
-                    self.log(f"PDF successfully saved to {output_path}", bold=True)
-                self.open_file(output_path)
-        else:
-            self.log("No labels to print.")
-        merger.close()
-
-        if self.not_updated_aliquots:
-            self.log("The following SL0 Numbers were not updated correctly:", bold=True)
-            for master_ID in self.not_updated_aliquots:
-                self.log(master_ID, bold=True)
-        else:
-            self.log("All SL0 Numbers were updated successfully.", bold=True)
+        self.output_merged_pdf(merger, files_added)  # Output the merged PDF
 
     def process_sample(
         self,
@@ -570,56 +619,64 @@ class AliquotUpdaterApp:
             self.not_updated_aliquots.append(Master_ID)
             return
 
+        def print_labels(self, Master_ID, labels_to_print_ids, headers):
+            # Printing labels
+            label_url = f"{self.base_url}/labels/9/print"
+            label_payload = {
+                "aliquots": labels_to_print_ids,
+                "numberOfLabelsPerAliquot": 1,
+            }
+            try:
+                response = requests.post(
+                    label_url,
+                    json=label_payload,
+                    headers=headers,
+                    verify=self.cert_path,
+                )
+                response.raise_for_status()
+                self.log(f"Labels made for SL0 Number {Master_ID}")
+                return response.content
+            except requests.exceptions.RequestException as e:
+                self.log(
+                    f"Error during label printing for SL0 Number {Master_ID}: {e}",
+                    bold=True,
+                )
+                self.not_updated_aliquots.append(Master_ID)
+                return
+
+        def print_cell_line_labels(self, Master_ID, labels_to_print_ids, headers):
+            # Printing labels for cell line cultures
+            culture_label_url = f"{self.base_url}/labels/3/print"
+            culture_label_payload = {
+                "aliquots": labels_to_print_ids,
+                "numberOfLabelsPerAliquot": 1,
+            }
+            try:
+                response = requests.post(
+                    culture_label_url,
+                    json=culture_label_payload,
+                    headers=headers,
+                    verify=self.cert_path,
+                )
+                response.raise_for_status()
+                self.log(f"Labels made for SL0 Number {Master_ID}")
+                return response.content
+            except requests.exceptions.RequestException as e:
+                self.log(
+                    f"Error during label printing for SL0 Number {Master_ID}: {e}",
+                    bold=True,
+                )
+                self.not_updated_aliquots.append(Master_ID)
+                return
+
+        # Initialize list to store aliquot IDs for label printing
         labels_to_print_ids = []
 
-        # Payload for initial sample search
-        payload = {
-            "table": "Samples",
-            "listViewId": -9,
-            "searchLines": [
-                {
-                    "lineNumber": 1,
-                    "fieldId": 10166,
-                    "comparison": "in",
-                    "compareValue": f"{Master_ID}",
-                    "openParensCount": 0,
-                    "closeParensCount": 0,
-                }
-            ],
-        }
-
-        try:
-            response = requests.post(
-                f"{self.base_url}/search/",
-                json=payload,
-                headers=headers,
-                verify=self.cert_path,
-            )
-            response.raise_for_status()
-            data = response.json()
-        except requests.exceptions.RequestException as e:
-            self.log(
-                f"Error during search request for SL0 Number {Master_ID}: {e}",
-            )
-            self.not_updated_aliquots.append(Master_ID)
-            return
-
-        try:
-            freezerworks_id = data["properties"]["results"][0]["FreezerworksID"]
-        except (KeyError, IndexError):
-            self.log(
-                f"Error: Unable to find FreezerworksID in response data for SL0 Number {Master_ID}",
-                bold=True,
-            )
-            self.not_updated_aliquots.append(Master_ID)
-            return
-
-        aliquot_url = f"{self.base_url}/samples/{freezerworks_id}/aliquots"
+        aliquot_url = self.masterID_search(Master_ID, headers)
 
         aliquot_payload = {
             "numberOfAliquots": 1,
             "WorkflowStatus": "Available",
-            "Aliquot_Type": Aliquot_Type,
             "Date_of_Collection": Date_of_Collection,
             "Sample_Collection_Site": Hospital_Name,
             "Sample_Notes": Notes,
@@ -627,9 +684,18 @@ class AliquotUpdaterApp:
         }
 
         if Aliquot_Type == "PK":
+            if Number_of_PK_Aliquots.strip():
+                Number_of_PK_Aliquots = int(Number_of_PK_Aliquots)
+            else:
+                self.log(
+                    f"Error: Number of PK Aliquots is required for SL0 Number {Master_ID}",
+                    bold=True,
+                )
+                self.not_updated_aliquots.append(Master_ID)
+                return
             aliquot_payload.update(
                 {
-                    "numberOfAliquots": int(Number_of_PK_Aliquots),
+                    "numberOfAliquots": Number_of_PK_Aliquots,
                     "Aliquot_Type": "Plasma for PK analysis",
                     "Freezing_Date": Freezing_Date,
                 }
@@ -695,7 +761,8 @@ class AliquotUpdaterApp:
                 )
                 response.raise_for_status()
                 data = response.json()
-                FK_ParentAliquotID = data["properties"]["PK_AliquotUID"]
+                PK_ParentAliquotID = data["properties"]["PK_AliquotUID"]
+                self.log(f"Aliquot UID created: {PK_ParentAliquotID}")
             except requests.exceptions.RequestException as e:
                 self.log(
                     f"Error during aliquot creation for SL0 Number {Master_ID}: {e}",
@@ -707,7 +774,7 @@ class AliquotUpdaterApp:
                 {
                     "Subaliquot_Type": "MNC",
                     "Freezing_Date": Freezing_Date,
-                    "FK_ParentAliquotID": FK_ParentAliquotID,
+                    "PK_ParentAliquotID": PK_ParentAliquotID,
                 }
             )
 
@@ -723,6 +790,21 @@ class AliquotUpdaterApp:
                 pk_aliquot_uid = data["properties"]["PK_AliquotUID"]
                 labels_to_print_ids.append(pk_aliquot_uid)
                 self.log(f"Aliquot UID created: {pk_aliquot_uid}")
+
+                aliquot_url_BMA = f"{self.base_url}/aliquots/{PK_ParentAliquotID}"
+                aliquot_payload_BMA = {
+                    "Passage_number": 0,
+                    "Cell_Line_Name_": f"SL0{Master_ID}-{PK_ParentAliquotID}",
+                    "Subaliquot_Type": "Cultured",
+                }
+                time.sleep(0.5)
+                response = requests.post(
+                    aliquot_url_BMA,
+                    json=aliquot_payload_BMA,
+                    headers=headers,
+                    verify=self.cert_path,
+                )
+                response.raise_for_status()
             except requests.exceptions.RequestException as e:
                 self.log(
                     f"Error during aliquot creation for SL0 Number {Master_ID}: {e}",
@@ -732,34 +814,72 @@ class AliquotUpdaterApp:
 
             if Study_TimePoint:
                 self.studyTimepoint(
-                    Master_ID, FK_ParentAliquotID, Study_TimePoint, headers
+                    Master_ID, PK_ParentAliquotID, Study_TimePoint, headers
                 )
                 for aliquot_id in labels_to_print_ids:
                     self.studyTimepoint(Master_ID, aliquot_id, Study_TimePoint, headers)
 
-            # Printing labels
-            label_url = f"{self.base_url}/labels/9/print"
-            label_payload = {
-                "aliquots": labels_to_print_ids,
-                "numberOfLabelsPerAliquot": 1,
-            }
+            content = print_labels(self, Master_ID, labels_to_print_ids, headers)
+            return content
+
+        elif Aliquot_Type in ["BC", "Tumor"]:
+            if Aliquot_Type == "BC":
+                Aliquot_Type = "Bone Core"
+            aliquot_payload.update(
+                {
+                    "Aliquot_Type": Aliquot_Type,
+                    "Subaliquot_Type": "Cultured",
+                    "Passage_number": 0,
+                }
+            )
+
             try:
                 response = requests.post(
-                    label_url,
-                    json=label_payload,
+                    aliquot_url,
+                    json=aliquot_payload,
                     headers=headers,
                     verify=self.cert_path,
                 )
                 response.raise_for_status()
-                self.log(f"Labels made for SL0 Number {Master_ID}")
-                return response.content
+                data = response.json()
+                PK_ParentAliquotID = data["properties"]["PK_AliquotUID"]
+                labels_to_print_ids.append(PK_ParentAliquotID)
+                self.log(f"Aliquot UID created: {PK_ParentAliquotID}")
+
+                time.sleep(0.5)  # Adding a small delay to avoid overwhelming the server
+
+                aliquot_url_alt = f"{self.base_url}/aliquots/{PK_ParentAliquotID}"
+                aliquot_payload_alt = {
+                    "Cell_Line_Name_": f"SL0{Master_ID}-{PK_ParentAliquotID}"
+                }
+                response = requests.post(
+                    aliquot_url_alt,
+                    json=aliquot_payload_alt,
+                    headers=headers,
+                    verify=self.cert_path,
+                )
+                response.raise_for_status()
             except requests.exceptions.RequestException as e:
                 self.log(
-                    f"Error during label printing for SL0 Number {Master_ID}: {e}",
+                    f"Error during aliquot creation for SL0 Number {Master_ID}: {e}",
                 )
+                self.not_updated_aliquots.append(Master_ID)
                 return
+
+            if Study_TimePoint:
+                self.studyTimepoint(
+                    Master_ID, PK_ParentAliquotID, Study_TimePoint, headers
+                )
+                for aliquot_id in labels_to_print_ids:
+                    self.studyTimepoint(Master_ID, aliquot_id, Study_TimePoint, headers)
+
+            content = print_cell_line_labels(
+                self, Master_ID, labels_to_print_ids, headers
+            )
+            return content
+
         else:
-            if Aliquot_Type == "Biomarker":
+            if Aliquot_Type == "BM":
                 Aliquot_Type = "Biomarker Blood"
 
             if Aliquot_Type == "NK":
@@ -781,7 +901,7 @@ class AliquotUpdaterApp:
                 )
                 response.raise_for_status()
                 data = response.json()
-                FK_ParentAliquotID = data["properties"]["PK_AliquotUID"]
+                PK_ParentAliquotID = data["properties"]["PK_AliquotUID"]
             except requests.exceptions.RequestException as e:
                 self.log(
                     f"Error during aliquot creation for SL0 Number {Master_ID}: {e}",
@@ -806,7 +926,7 @@ class AliquotUpdaterApp:
                 {
                     "Subaliquot_Type": "Plasma",
                     "Freezing_Date": Freezing_Date,
-                    "FK_ParentAliquotID": FK_ParentAliquotID,
+                    "PK_ParentAliquotID": PK_ParentAliquotID,
                 }
             )
 
@@ -864,36 +984,18 @@ class AliquotUpdaterApp:
                     self.log(f"Aliquot UID created: {pk_aliquot_uid}")
                 except requests.exceptions.RequestException as e:
                     self.log(
-                        f"Error during aliquot creation in repeat loop for SL0 Number {Master_ID}: {e}",
+                        f"Error during aliquot creation (in repeat loop) for SL0 Number {Master_ID}: {e}",
                     )
                     return
             if Study_TimePoint:
                 self.studyTimepoint(
-                    Master_ID, FK_ParentAliquotID, Study_TimePoint, headers
+                    Master_ID, PK_ParentAliquotID, Study_TimePoint, headers
                 )
                 for aliquot_id in labels_to_print_ids:
                     self.studyTimepoint(Master_ID, aliquot_id, Study_TimePoint, headers)
 
-            # Printing labels
-            label_url = f"{self.base_url}/labels/9/print"
-            label_payload = {
-                "aliquots": labels_to_print_ids,
-                "numberOfLabelsPerAliquot": 1,
-            }
-            try:
-                response = requests.post(
-                    label_url,
-                    json=label_payload,
-                    headers=headers,
-                    verify=self.cert_path,
-                )
-                response.raise_for_status()
-                self.log(f"Labels made for SL0 Number {Master_ID}")
-                return response.content
-            except requests.exceptions.RequestException as e:
-                self.log(
-                    f"Error during label printing for SL0 Number {Master_ID}: {e}",
-                )
+            content = print_labels(self, Master_ID, labels_to_print_ids, headers)
+            return content
 
     def passage_culture_cells(self):
         headers, csv_file_path = self.validate_inputs()
@@ -949,29 +1051,7 @@ class AliquotUpdaterApp:
                     merger.append(pdf_stream)  # Append to the merger
                     files_added += 1
 
-        # After all processing is done, output the merged PDF
-        if files_added > 0:
-            output_path = filedialog.asksaveasfilename(
-                defaultextension=".pdf",
-                filetypes=[("PDF files", "*.pdf")],
-                initialfile="Processed_Samples.pdf",
-            )
-            if output_path:
-                # Write the merged PDF to file
-                with open(output_path, "wb") as output_file:
-                    merger.write(output_file)
-                    self.log(f"PDF successfully saved to {output_path}", bold=True)
-                self.open_file(output_path)
-        else:
-            self.log("No labels to print.")
-        merger.close()
-
-        if self.not_updated_aliquots:
-            self.log("The following SL0 Numbers were not updated correctly:", bold=True)
-            for master_ID in self.not_updated_aliquots:
-                self.log(master_ID, bold=True)
-        else:
-            self.log("All SL0 Numbers were updated successfully.", bold=True)
+        self.output_merged_pdf(merger, files_added)  # Output the merged PDF
 
     def passage_cells(
         self,
@@ -1036,50 +1116,7 @@ class AliquotUpdaterApp:
         IDEXX_labels_to_print_ids = []
         frozen_culture_labels_to_print_ids = []
 
-        # Payload for initial sample search
-        payload = {
-            "table": "Samples",
-            "listViewId": -9,
-            "limit": 1,
-            "searchLines": [
-                {
-                    "lineNumber": 1,
-                    "fieldId": 10166,
-                    "comparison": "in",
-                    "compareValue": f"{Master_ID}",
-                    "openParensCount": 0,
-                    "closeParensCount": 0,
-                }
-            ],
-        }
-
-        try:
-            response = requests.post(
-                f"{self.base_url}/search/",
-                json=payload,
-                headers=headers,
-                verify=self.cert_path,
-            )
-            response.raise_for_status()
-            data = response.json()
-        except requests.exceptions.RequestException as e:
-            self.log(
-                f"Error during search request for SL0 Number {Master_ID}: {e}",
-            )
-            self.not_updated_aliquots.append(Master_ID)
-            return
-
-        try:
-            freezerworks_id = data["properties"]["results"][0]["FreezerworksID"]
-        except (KeyError, IndexError):
-            self.log(
-                f"Error: Unable to find FreezerworksID in response data for SL0 Number {Master_ID}",
-                bold=True,
-            )
-            self.not_updated_aliquots.append(Master_ID)
-            return
-
-        aliquot_url = f"{self.base_url}/samples/{freezerworks_id}/aliquots"
+        aliquot_url = self.masterID_search(Master_ID, headers)
 
         # Determine the number of repeats and label types
         Passage_Number = int(Passage_Number)

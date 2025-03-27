@@ -212,6 +212,7 @@ class AliquotUpdaterApp:
                         "(Study Time Point)",
                         "(Notes)",
                         "(Number of PK Aliquots)",
+                        "(PK Time Point)",
                     ]
                 )
                 today_date = datetime.now().strftime("%m/%d/%Y")
@@ -544,6 +545,7 @@ class AliquotUpdaterApp:
                 Study_TimePoint,
                 Notes,
                 Number_of_PK_Aliquots,
+                PK_Time_Point,
             ) = [col.strip() for col in csv_row[:9]]
 
             if Master_ID:  # Only process if Master ID is present
@@ -558,6 +560,7 @@ class AliquotUpdaterApp:
                     Study_TimePoint,
                     Notes,
                     Number_of_PK_Aliquots,
+                    PK_Time_Point,
                 )
                 if sample_pdf:
                     pdf_stream = BytesIO(sample_pdf)  # Use BytesIO for PDF stream
@@ -583,6 +586,7 @@ class AliquotUpdaterApp:
         Study_TimePoint,
         Notes,
         Number_of_PK_Aliquots,
+        PK_Time_Point,
     ):
         if (
             not Master_ID
@@ -698,6 +702,7 @@ class AliquotUpdaterApp:
                     "numberOfAliquots": Number_of_PK_Aliquots,
                     "Aliquot_Type": "Plasma for PK analysis",
                     "Freezing_Date": Freezing_Date,
+                    "PK_Time_Point_W_R_To_Dose": PK_Time_Point,
                 }
             )
 

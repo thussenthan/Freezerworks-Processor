@@ -448,6 +448,8 @@ class AliquotUpdaterApp:
     def masterID_search(self, Master_ID, headers):
         aliquot_url = ""
         # Payload for initial sample search
+        if len(Master_ID) == 3:
+            Master_ID = "0" + Master_ID
         payload = {
             "table": "Samples",
             "listViewId": -9,

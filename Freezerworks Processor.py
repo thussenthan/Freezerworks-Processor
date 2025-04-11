@@ -548,7 +548,7 @@ class AliquotUpdaterApp:
                 Notes,
                 Number_of_PK_Aliquots,
                 PK_Time_Point,
-            ) = [col.strip() for col in csv_row[:9]]
+            ) = [col.strip() for col in csv_row[:10]]
 
             if Master_ID:  # Only process if Master ID is present
                 sample_pdf = self.process_sample(

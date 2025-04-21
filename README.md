@@ -11,7 +11,7 @@ Freezerworks Processor is a Python-based GUI application designed to automate va
 - **Freeze Passaged Cells** – Manages aliquot creation for passaged cells with associated PDF label generation.
 - **Aliquot Freezer Assignment** – Updates aliquot freezer location assignments using CSV input.
 
-The program uses Bearer Token authentication to securely connect with the Freezerworks API, and it includes features such as CSV template generation, SSL certificate verification, and real-time logging.
+The program uses Bearer Token authentication to securely connect with the Freezerworks REST API, and it includes features such as CSV template generation, SSL certificate verification, and real-time logging.
 
 ---
 

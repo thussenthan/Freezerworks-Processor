@@ -640,7 +640,7 @@ class AliquotUpdaterApp:
                     verify=self.cert_path,
                 )
                 response.raise_for_status()
-                self.log(f"Labels made for SL0 Number {Master_ID}")
+                self.log(f"Labels made for SL0 Number {Master_ID}, {Aliquot_Type}")
                 return response.content
             except requests.exceptions.RequestException as e:
                 self.log(
@@ -665,7 +665,7 @@ class AliquotUpdaterApp:
                     verify=self.cert_path,
                 )
                 response.raise_for_status()
-                self.log(f"Labels made for SL0 Number {Master_ID}")
+                self.log(f"Labels made for SL0 Number {Master_ID}, {Aliquot_Type}")
                 return response.content
             except requests.exceptions.RequestException as e:
                 self.log(
@@ -749,7 +749,7 @@ class AliquotUpdaterApp:
                     verify=self.cert_path,
                 )
                 response.raise_for_status()
-                self.log(f"Labels made for SL0 Number {Master_ID}")
+                self.log(f"Labels made for SL0 Number {Master_ID}, {Aliquot_Type}")
                 return response.content
             except requests.exceptions.RequestException as e:
                 self.log(

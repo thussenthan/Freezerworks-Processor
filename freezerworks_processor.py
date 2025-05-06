@@ -165,6 +165,8 @@ class AliquotUpdaterApp:
         self.not_updated_aliquots = []
         self.base_url = "https://freezerworks.pennstatehealth.net/api/v1"
         self.cert_path = self.get_cert_path()
+        self.updating = False
+        self._ellipse_index = 0
 
     def clear_not_updated_aliquots(self):
         self.not_updated_aliquots.clear()
@@ -308,14 +310,53 @@ class AliquotUpdaterApp:
 
     def start_update(self):
         selected_functionality = self.functionality_var.get()
-        if selected_functionality == "aliquot_assignment":
-            self.run_in_thread(self.update_aliquots)
-        elif selected_functionality == "process_sample":
-            self.run_in_thread(self.process_patient_sample)
-        elif selected_functionality == "freeze_passaged_cells":
-            self.run_in_thread(self.passage_culture_cells)
-        else:
+        if not selected_functionality:
             messagebox.showerror("Error", "Please select a functionality to proceed.")
+            return
+        # begin animation & disable button
+        self.updating = True
+        self._ellipse_index = 0
+        self.update_button.config(state=tk.DISABLED)
+        self.animate_update_text()
+
+        if selected_functionality == "aliquot_assignment":
+            self.run_in_thread(self._wrapped_update_aliquots)
+        elif selected_functionality == "process_sample":
+            self.run_in_thread(self._wrapped_process_patient_sample)
+        else:  # freeze_passaged_cells
+            self.run_in_thread(self._wrapped_passage_culture_cells)
+
+    def _wrapped_update_aliquots(self):
+        try:
+            self.update_aliquots()
+        finally:
+            self.root.after(0, self.finish_update)
+
+    def _wrapped_process_patient_sample(self):
+        try:
+            self.process_patient_sample()
+        finally:
+            self.root.after(0, self.finish_update)
+
+    def _wrapped_passage_culture_cells(self):
+        try:
+            self.passage_culture_cells()
+        finally:
+            self.root.after(0, self.finish_update)
+
+    def animate_update_text(self):
+        if not self.updating:
+            self.update_button.config(text="Update", state=tk.NORMAL)
+            return
+        dots = "." * (self._ellipse_index % 4)
+        self.update_button.config(text=f"Updating{dots}")
+        self._ellipse_index += 1
+        # re-schedule
+        self.root.after(500, self.animate_update_text)
+
+    def finish_update(self):
+        # call this on the main thread when work is done
+        self.updating = False
 
     def validate_inputs(self):
         token = self.token_entry.get()
@@ -333,15 +374,15 @@ class AliquotUpdaterApp:
             "Authorization": "Bearer " + token,
         }
 
-        test_url = f"{self.base_url}/aliquots/test"
+        test_url = f"{self.base_url}/freezers/"
         try:
             test_response = requests.get(
                 test_url, headers=headers, verify=self.cert_path
             )
-            if test_response.status_code == 401:
+            if test_response.status_code != 200:
                 messagebox.showerror(
                     "Error",
-                    "Invalid Bearer Token. Please check your token and try again.",
+                    "Invalid Bearer Token. Please check (or re-generate) your token and try again.",
                 )
                 return
         except requests.exceptions.SSLError as e:
@@ -608,7 +649,7 @@ class AliquotUpdaterApp:
         Hospital_Name = self.get_hospital_name(Sample_Collection_Site, Master_ID)
         if Hospital_Name is None:
             self.log(
-                f"Error: Sample processing aborted due to invalid hospital name for SL0 Number {Master_ID}. Please re-create the Bearer Token (if 5 minutes has elapsed) and try again.",
+                f"Error: Sample processing aborted due to invalid hospital name for SL0 Number {Master_ID}.",
                 bold=True,
             )
             self.not_updated_aliquots.append(Master_ID)
@@ -720,7 +761,7 @@ class AliquotUpdaterApp:
                 data = response.json()
                 for entity in data["entities"]:
                     labels_to_print_ids.append(entity["PK_AliquotUID"])
-                    self.log(f"Aliquot UID created: {entity["PK_AliquotUID"]}")
+                    self.log(f"Aliquot UID created: {entity['PK_AliquotUID']}")
             except requests.exceptions.RequestException as e:
                 self.log(
                     f"Error during aliquot creation for SL0 Number {Master_ID}: {e}",
@@ -1096,7 +1137,7 @@ class AliquotUpdaterApp:
         Hospital_Name = self.get_hospital_name(Sample_Collection_Site, Master_ID)
         if Hospital_Name is None:
             self.log(
-                f"Error: Sample processing aborted due to invalid hospital name for SL0 Number {Master_ID}. Please re-create the Bearer Token (if 5 minutes has elapsed) and try again.",
+                f"Error: Sample processing aborted due to invalid hospital name for SL0 Number {Master_ID}.",
                 bold=True,
             )
             self.not_updated_aliquots.append(Master_ID)

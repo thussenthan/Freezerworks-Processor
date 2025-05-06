@@ -58,7 +58,7 @@ The program uses Bearer Token authentication to securely connect with the Freeze
    - **Executable:**
      To make an executable file, run the following command:
      ```bash
-     pyinstaller --clean --onefile --windowed --add-data "freezerworks.pennstatehealth.net.crt;." "Freezerworks Processor.py"
+     pyinstaller --clean --onefile --windowed --add-data "freezerworks.pennstatehealth.net.crt;." "freezerworks_processor.py"
      ```
      Then double-click `Freezerworks Processor.exe` to launch.
    - **Python Script:**  
